@@ -8,6 +8,7 @@
 
 import { get, jsonp } from '../../services/fetch';
 import * as types from '../types';
+import cacheManager from '../../services/cache';
 
 export const getters = {
     suggestions: state => state.suggestions,
@@ -24,9 +25,33 @@ export const actions = {
      * @returns {Promise}
      */
     async fetchSuggestion ({ commit }, wd) {
-        const data = await jsonp('http://suggestion.baidu.com/su', { wd }).then(res => res.s);
-        commit(types.RECEIVE_SUGGESTIONS, data);
-        return data;
+        if (!wd || wd.trim().length === 0) {
+            commit(types.RECEIVE_SUGGESTIONS, []);
+            return [];
+        }
+
+        const cacheKey = `suggestion_${wd.toLowerCase()}`;
+
+        // 尝试从缓存获取
+        const cachedData = cacheManager.get(cacheKey);
+        if (cachedData) {
+            commit(types.RECEIVE_SUGGESTIONS, cachedData);
+            return cachedData;
+        }
+
+        try {
+            const data = await jsonp('http://suggestion.baidu.com/su', { wd }).then(res => res.s || []);
+
+            // 缓存搜索建议（5分钟）
+            cacheManager.set(cacheKey, data, 5 * 60 * 1000);
+
+            commit(types.RECEIVE_SUGGESTIONS, data);
+            return data;
+        } catch (error) {
+            console.warn('Failed to fetch search suggestions:', error);
+            commit(types.RECEIVE_SUGGESTIONS, []);
+            return [];
+        }
     },
 
     /**

@@ -60,7 +60,13 @@
                         span.forks {{item.forks}}
                     .repositories__built
                         | Built by
-                        img(v-for="(item, inx) in item.builtBy" :key="inx" :src="item.avatar")
+                        lazy-image.built-by-avatar(
+                            v-for="(avatar, inx) in item.builtBy"
+                            :key="inx"
+                            :src="avatar.avatar"
+                            :alt="avatar.username || 'Developer'"
+                            img-class="avatar-img"
+                        )
 
                 el-card.developers(v-if="query.type === 'developers'")
                     .developers__author(
@@ -68,7 +74,11 @@
                         @click.meta="onLinkTapAction(item.url, true)"
                         @click.ctrl="onLinkTapAction(item.url, true)"
                     )
-                        img.avatar(:src="item.avatar")
+                        lazy-image.avatar(
+                            :src="item.avatar"
+                            :alt="item.author || item.username"
+                            img-class="avatar-img"
+                        )
                         .author
                             h2 {{item.author}}
                             p {{item.username}}
@@ -88,12 +98,16 @@ import { mapGetters, mapActions } from 'vuex';
 import Waterfall from 'vue-waterfall/lib/waterfall';
 import WaterfallSlot from 'vue-waterfall/lib/waterfall-slot';
 import languages from '../../services/languages';
+import LazyImage from '../../components/lazy-image/index.vue';
+import VirtualList from '../../components/virtual-list/index.vue';
 
 export default {
     name: 'github-trending',
     components: {
         Waterfall,
-        WaterfallSlot
+        WaterfallSlot,
+        LazyImage,
+        VirtualList
     },
     props: {
         lang: [String, Array],
@@ -119,11 +133,27 @@ export default {
                 lang,
                 since: this.since || 'weekly',
                 type: this.type || 'repositories',
-            }
+            },
+            // 性能监控
+            performanceMetrics: {
+                fetchStartTime: 0,
+                fetchEndTime: 0,
+                renderStartTime: 0,
+                renderEndTime: 0
+            },
+            // 防抖定时器
+            fetchTimer: null
         };
     },
     async mounted() {
         this.init();
+    },
+    beforeDestroy() {
+        // 清理防抖定时器
+        if (this.fetchTimer) {
+            clearTimeout(this.fetchTimer);
+            this.fetchTimer = null;
+        }
     },
     computed: {
         ...mapGetters('github', ['trendings'])
@@ -137,17 +167,69 @@ export default {
             this.loading = true;
             this.fetchError = false;
 
+            // 性能监控开始
+            this.performanceMetrics.fetchStartTime = performance.now();
+
             try {
                 this.$emit('update', this.query);
-                await this.fetchTrending(this.query);
+
+                // 使用防抖优化，避免频繁请求
+                await this.debouncedFetchTrending();
+
+                this.performanceMetrics.fetchEndTime = performance.now();
+                this.logPerformanceMetrics();
+
             } catch (e) {
-                console.log(e);
+                console.error('Failed to fetch trending data:', e);
                 this.fetchError = true;
             }
 
             this.loading = false;
             loadingInstance.close();
-            this.$refs.scrollView.refresh();
+
+            // 延迟刷新滚动视图，避免阻塞渲染
+            this.$nextTick(() => {
+                if (this.$refs.scrollView) {
+                    this.$refs.scrollView.refresh();
+                }
+            });
+        },
+
+        /**
+         * 防抖的数据获取方法
+         */
+        debouncedFetchTrending() {
+            if (this.fetchTimer) {
+                clearTimeout(this.fetchTimer);
+            }
+
+            return new Promise((resolve, reject) => {
+                this.fetchTimer = setTimeout(async () => {
+                    try {
+                        const result = await this.fetchTrending(this.query);
+                        resolve(result);
+                    } catch (error) {
+                        reject(error);
+                    }
+                }, 300); // 300ms防抖
+            });
+        },
+
+        /**
+         * 记录性能指标
+         */
+        logPerformanceMetrics() {
+            const fetchTime = this.performanceMetrics.fetchEndTime - this.performanceMetrics.fetchStartTime;
+
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`GitHub Trending fetch time: ${fetchTime.toFixed(2)}ms`);
+                console.log(`Data count: ${this.trendings.length}`);
+            }
+
+            // 如果获取时间过长，给出警告
+            if (fetchTime > 5000) {
+                console.warn('GitHub Trending data fetch took too long:', fetchTime);
+            }
         },
         onLinkTapAction(link, jump) {
             this.$emit('tap', link, jump);

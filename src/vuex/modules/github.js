@@ -10,12 +10,31 @@ import Promise from 'bluebird';
 import { get } from '../../services/fetch';
 import * as types from '../types';
 import storage from '../../services/storage';
+import cacheManager from '../../services/cache';
 
 const time = new Date();
 const year = new Date(time.getFullYear(), 0, 1);
 const toDay = time.getDate();
 const toWeek = Math.ceil((((new Date() - year) / 86400000) + year.getDay() + 1) / 7);
 const toMonth = time.getMonth() + 1;
+
+/**
+ * 根据时间维度获取缓存TTL
+ * @param {string} since 时间维度
+ * @returns {number} 缓存时间（毫秒）
+ */
+function getCacheTTL(since) {
+    switch (since) {
+        case 'daily':
+            return 2 * 60 * 60 * 1000; // 2小时
+        case 'weekly':
+            return 6 * 60 * 60 * 1000; // 6小时
+        case 'monthly':
+            return 12 * 60 * 60 * 1000; // 12小时
+        default:
+            return 4 * 60 * 60 * 1000; // 4小时
+    }
+}
 
 const fetchTrendingRepos = async (lang, since, type = 'repositories') => {
     console.log(lang);
@@ -54,21 +73,46 @@ export const actions = {
      * @returns {Promise}
      */
     async fetchTrending ({ commit }, query = {}) {
-        const data = await storage.getItem(JSON.stringify(query));
+        const cacheKey = `trending_${JSON.stringify(query)}`;
 
+        // 首先尝试从缓存获取数据
+        const cachedData = cacheManager.get(cacheKey);
+        if (cachedData && cachedData.repos && cachedData.repos.length) {
+            commit(types.RECEIVE_GITHUB_TRENDINGS, cachedData.repos);
+            return cachedData.repos;
+        }
+
+        // 检查旧的存储格式（向后兼容）
+        const legacyData = await storage.getItem(JSON.stringify(query));
         if (
-            data && data.repos.length && (
-                (query.since === 'daily' && data.toDay === toDay) ||
-                (query.since === 'weekly' && data.toWeek === toWeek) ||
-                (query.since === 'monthly' && data.toMonth === toMonth)
+            legacyData && legacyData.repos && legacyData.repos.length && (
+                (query.since === 'daily' && legacyData.toDay === toDay) ||
+                (query.since === 'weekly' && legacyData.toWeek === toWeek) ||
+                (query.since === 'monthly' && legacyData.toMonth === toMonth)
             )
         ) {
-            commit(types.RECEIVE_GITHUB_TRENDINGS, data.repos);
-            return data.repos;
+            // 迁移到新的缓存系统
+            const cacheData = {
+                repos: legacyData.repos,
+                toDay,
+                toWeek,
+                toMonth,
+                timestamp: Date.now()
+            };
+
+            // 根据时间维度设置不同的缓存时间
+            const cacheTTL = getCacheTTL(query.since);
+            cacheManager.set(cacheKey, cacheData, cacheTTL);
+
+            commit(types.RECEIVE_GITHUB_TRENDINGS, legacyData.repos);
+
+            // 清理旧格式数据
+            storage.removeItem(JSON.stringify(query));
+
+            return legacyData.repos;
         }
 
         const { since, type } = query;
-
         let repos = [];
         let isAllLanguage = false;
 
@@ -79,27 +123,48 @@ export const actions = {
             });
         }
 
-        if (!query.lang.length || isAllLanguage) {
-            repos = await fetchTrendingRepos('', since, type);
-        } else {
-            await Promise.map(query.lang, async lang => {
-                const res = await fetchTrendingRepos(lang, since, type);
-                repos = repos.concat(res);
-                return res;
-            });
-            repos = repos.sort((a, b) => (+b.added - a.added));
+        try {
+            if (!query.lang.length || isAllLanguage) {
+                repos = await fetchTrendingRepos('', since, type);
+            } else {
+                // 并发请求优化：使用Promise.map限制并发数
+                await Promise.map(query.lang, async lang => {
+                    const res = await fetchTrendingRepos(lang, since, type);
+                    repos = repos.concat(res);
+                    return res;
+                }, { concurrency: 3 }); // 限制并发数为3
+
+                repos = repos.sort((a, b) => (+b.added - a.added));
+            }
+
+            commit(types.RECEIVE_GITHUB_TRENDINGS, repos);
+
+            // 使用新的缓存系统存储数据
+            const cacheData = {
+                repos,
+                toDay,
+                toWeek,
+                toMonth,
+                timestamp: Date.now()
+            };
+
+            const cacheTTL = getCacheTTL(since);
+            cacheManager.set(cacheKey, cacheData, cacheTTL);
+
+            return repos;
+        } catch (error) {
+            console.error('Failed to fetch trending data:', error);
+
+            // 如果请求失败，尝试返回过期的缓存数据
+            const expiredCache = storage.getItem(JSON.stringify(query));
+            if (expiredCache && expiredCache.repos && expiredCache.repos.length) {
+                console.log('Using expired cache data due to fetch failure');
+                commit(types.RECEIVE_GITHUB_TRENDINGS, expiredCache.repos);
+                return expiredCache.repos;
+            }
+
+            throw error;
         }
-
-        commit(types.RECEIVE_GITHUB_TRENDINGS, repos);
-
-        storage.setItem(JSON.stringify(query), {
-            repos,
-            toDay,
-            toWeek,
-            toMonth
-        });
-
-        return repos;
     },
 
 };

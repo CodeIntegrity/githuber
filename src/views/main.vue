@@ -51,6 +51,8 @@ import storage from '../services/storage';
 import defaultConfig from '../services/config';
 import themeBlack from '../theme/black';
 import themeDefault from '../theme/default';
+import { PerformanceMonitor, isSlowDevice, debounce } from '../utils/performance';
+import cacheManager from '../services/cache';
 
 export default {
     name: 'hero',

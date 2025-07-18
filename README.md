@@ -160,13 +160,21 @@
 - **Chrome APIs** - tabs, runtime, topSites等
 - **Content Security Policy** - 增强安全策略
 
+### 性能优化
+- **智能缓存** - 双层缓存系统，LRU策略
+- **懒加载** - Intersection Observer API
+- **虚拟滚动** - 大列表性能优化
+- **防抖节流** - 提升交互响应速度
+- **性能监控** - Performance API集成
+
 ## 📝 **更新日志**
 
-### v1.8.0 (2025-07-18) - Manifest V3迁移
+### v1.8.0 (2025-07-18) - Manifest V3迁移 + 性能优化
 
 - 🚀 **重大更新**: 完全迁移到Chrome Extension Manifest V3
 - ✅ **兼容性**: 支持Chrome 88+，解决"不受支持的扩展"问题
 - 🔒 **安全性**: 更新内容安全策略，优化权限结构
+- ⚡ **性能优化**: 实现智能缓存、懒加载、虚拟滚动等优化
 - 🛠️ **构建**: 改进构建流程，修复Node.js兼容性问题
 
 [查看完整更新日志](./CHANGELOG.md)
@@ -183,18 +191,24 @@
 - [X] 国际化支持（中英文）
 - [X] 夜间模式
 - [X] 最常访问网站导入
+- [X] **性能优化系统**
+  - [X] 智能数据缓存策略
+  - [X] 图片懒加载优化
+  - [X] 虚拟滚动组件
+  - [X] 防抖节流优化
+  - [X] 性能监控工具
 
 ### 计划中 📅
 
 - [ ] 高级设置面板
   - [ ] RSS订阅功能
-  - [ ] 自定义主题
+  - [ ] 自定义主题编辑器
 - [ ] 云端数据同步
   - [ ] 账号系统（登录、注册）
   - [ ] 跨设备同步
-- [ ] 性能优化
-  - [ ] 数据缓存策略
-  - [ ] 懒加载优化
+- [ ] AI功能集成
+  - [ ] 智能推荐算法
+  - [ ] 个性化内容过滤
 
 ## 🔗 **相关链接**
 
@@ -209,6 +223,8 @@
 
 - [Chrome Extension Manifest V3](https://developer.chrome.com/docs/extensions/mv3/intro/) - 官方文档
 - [Manifest V2 to V3 Migration](https://developer.chrome.com/docs/extensions/migrating/) - 迁移指南
+- [性能优化实现文档](./PERFORMANCE_OPTIMIZATION.md) - 详细的性能优化说明
+- [Bug修复总结](./BUG_FIX_SUMMARY.md) - 问题修复记录
 - [GitHub Octicons](https://octicons.github.com/) - 图标库
 - [Vue.js Documentation](https://v2.vuejs.org/) - Vue.js 2.x文档
 

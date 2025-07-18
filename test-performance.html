@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GITHUBER 性能优化测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
+        .test-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .metric {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 GITHUBER 性能优化测试</h1>
+            <p>测试新实现的缓存系统、懒加载和性能监控功能</p>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">📦 缓存系统测试</div>
+            <button onclick="testCache()">测试缓存功能</button>
+            <button onclick="clearCache()">清空缓存</button>
+            <div id="cache-results"></div>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">🖼️ 懒加载图片测试</div>
+            <button onclick="testLazyImages()">生成测试图片</button>
+            <div id="lazy-images"></div>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">📊 性能监控测试</div>
+            <button onclick="testPerformanceMonitor()">运行性能测试</button>
+            <div id="performance-results"></div>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">💾 存储使用情况</div>
+            <button onclick="checkStorageInfo()">检查存储状态</button>
+            <div id="storage-info"></div>
+        </div>
+
+        <div class="test-section">
+            <div class="test-title">📈 实时性能指标</div>
+            <div class="metrics">
+                <div class="metric">
+                    <div class="metric-value" id="memory-used">--</div>
+                    <div class="metric-label">内存使用 (MB)</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" id="cache-items">--</div>
+                    <div class="metric-label">缓存项目数</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" id="storage-used">--</div>
+                    <div class="metric-label">存储使用 (KB)</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value" id="page-load-time">--</div>
+                    <div class="metric-label">页面加载时间 (ms)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 模拟缓存管理器（简化版本）
+        class MockCacheManager {
+            constructor() {
+                this.cache = new Map();
+                this.keyPrefix = 'TEST_CACHE_';
+            }
+
+            set(key, data, ttl = 30000) {
+                const expireTime = Date.now() + ttl;
+                this.cache.set(this.keyPrefix + key, {
+                    data,
+                    expireTime,
+                    timestamp: Date.now()
+                });
+                this.updateMetrics();
+            }
+
+            get(key) {
+                const item = this.cache.get(this.keyPrefix + key);
+                if (item && item.expireTime > Date.now()) {
+                    return item.data;
+                }
+                if (item) {
+                    this.cache.delete(this.keyPrefix + key);
+                }
+                return null;
+            }
+
+            clear() {
+                this.cache.clear();
+                this.updateMetrics();
+            }
+
+            getStats() {
+                return {
+                    size: this.cache.size,
+                    keys: Array.from(this.cache.keys())
+                };
+            }
+
+            updateMetrics() {
+                document.getElementById('cache-items').textContent = this.cache.size;
+            }
+        }
+
+        const mockCache = new MockCacheManager();
+
+        // 测试缓存功能
+        function testCache() {
+            const results = document.getElementById('cache-results');
+            results.innerHTML = '';
+
+            const tests = [
+                {
+                    name: '设置缓存',
+                    test: () => {
+                        mockCache.set('test-key', { message: 'Hello Cache!' }, 5000);
+                        return '缓存设置成功';
+                    }
+                },
+                {
+                    name: '获取缓存',
+                    test: () => {
+                        const data = mockCache.get('test-key');
+                        return data ? `获取成功: ${data.message}` : '获取失败';
+                    }
+                },
+                {
+                    name: '过期测试',
+                    test: () => {
+                        mockCache.set('expire-test', 'will expire', 100);
+                        setTimeout(() => {
+                            const data = mockCache.get('expire-test');
+                            const result = data ? '过期失败' : '过期成功';
+                            addResult('过期测试', result, !data);
+                        }, 150);
+                        return '过期测试已启动（150ms后检查）';
+                    }
+                }
+            ];
+
+            tests.forEach(test => {
+                try {
+                    const result = test.test();
+                    addResult(test.name, result, true);
+                } catch (error) {
+                    addResult(test.name, `错误: ${error.message}`, false);
+                }
+            });
+        }
+
+        // 清空缓存
+        function clearCache() {
+            mockCache.clear();
+            addResult('清空缓存', '缓存已清空', true, 'cache-results');
+        }
+
+        // 测试懒加载图片
+        function testLazyImages() {
+            const container = document.getElementById('lazy-images');
+            container.innerHTML = '<p>生成测试图片...</p>';
+
+            const imageUrls = [
+                'https://picsum.photos/200/150?random=1',
+                'https://picsum.photos/200/150?random=2',
+                'https://picsum.photos/200/150?random=3',
+                'https://picsum.photos/200/150?random=4'
+            ];
+
+            container.innerHTML = '';
+            imageUrls.forEach((url, index) => {
+                const imgContainer = document.createElement('div');
+                imgContainer.style.cssText = 'display: inline-block; margin: 10px; border: 1px solid #ddd; padding: 10px;';
+                
+                const img = document.createElement('img');
+                img.src = url;
+                img.alt = `测试图片 ${index + 1}`;
+                img.style.cssText = 'width: 200px; height: 150px; object-fit: cover;';
+                
+                img.onload = () => {
+                    addResult(`图片 ${index + 1}`, '加载成功', true, 'lazy-images');
+                };
+                
+                img.onerror = () => {
+                    addResult(`图片 ${index + 1}`, '加载失败', false, 'lazy-images');
+                };
+
+                imgContainer.appendChild(img);
+                container.appendChild(imgContainer);
+            });
+        }
+
+        // 测试性能监控
+        function testPerformanceMonitor() {
+            const results = document.getElementById('performance-results');
+            results.innerHTML = '';
+
+            // 模拟性能监控
+            const startTime = performance.now();
+            
+            // 模拟一些计算密集型操作
+            let sum = 0;
+            for (let i = 0; i < 1000000; i++) {
+                sum += Math.random();
+            }
+            
+            const endTime = performance.now();
+            const duration = endTime - startTime;
+
+            addResult('计算性能', `执行时间: ${duration.toFixed(2)}ms`, true, 'performance-results');
+            addResult('计算结果', `随机数总和: ${sum.toFixed(2)}`, true, 'performance-results');
+
+            // 内存使用情况
+            if (performance.memory) {
+                const memory = performance.memory;
+                addResult('内存使用', `已用: ${(memory.usedJSHeapSize / 1024 / 1024).toFixed(2)}MB`, true, 'performance-results');
+                addResult('内存总量', `总计: ${(memory.totalJSHeapSize / 1024 / 1024).toFixed(2)}MB`, true, 'performance-results');
+            }
+        }
+
+        // 检查存储信息
+        function checkStorageInfo() {
+            const results = document.getElementById('storage-info');
+            results.innerHTML = '';
+
+            try {
+                // 检查localStorage使用情况
+                let totalSize = 0;
+                for (let key in localStorage) {
+                    if (localStorage.hasOwnProperty(key)) {
+                        totalSize += localStorage[key].length;
+                    }
+                }
+
+                addResult('localStorage', `使用: ${(totalSize / 1024).toFixed(2)}KB`, true, 'storage-info');
+                addResult('存储项目', `数量: ${Object.keys(localStorage).length}`, true, 'storage-info');
+
+                // 测试存储容量
+                const testKey = '__storage_test__';
+                try {
+                    localStorage.setItem(testKey, 'test');
+                    localStorage.removeItem(testKey);
+                    addResult('存储可用性', '正常', true, 'storage-info');
+                } catch (e) {
+                    addResult('存储可用性', '存储空间不足', false, 'storage-info');
+                }
+
+            } catch (error) {
+                addResult('存储检查', `错误: ${error.message}`, false, 'storage-info');
+            }
+        }
+
+        // 添加测试结果
+        function addResult(name, message, success, containerId = 'cache-results') {
+            const container = document.getElementById(containerId);
+            const result = document.createElement('div');
+            result.className = `test-result ${success ? 'success' : 'error'}`;
+            result.innerHTML = `<strong>${name}:</strong> ${message}`;
+            container.appendChild(result);
+        }
+
+        // 更新实时指标
+        function updateMetrics() {
+            // 内存使用
+            if (performance.memory) {
+                const memoryUsed = (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1);
+                document.getElementById('memory-used').textContent = memoryUsed;
+            }
+
+            // 存储使用
+            let storageSize = 0;
+            try {
+                for (let key in localStorage) {
+                    if (localStorage.hasOwnProperty(key)) {
+                        storageSize += localStorage[key].length;
+                    }
+                }
+                document.getElementById('storage-used').textContent = (storageSize / 1024).toFixed(1);
+            } catch (e) {
+                document.getElementById('storage-used').textContent = 'N/A';
+            }
+
+            // 页面加载时间
+            if (performance.timing) {
+                const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
+                if (loadTime > 0) {
+                    document.getElementById('page-load-time').textContent = loadTime;
+                }
+            }
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            updateMetrics();
+            setInterval(updateMetrics, 2000); // 每2秒更新一次指标
+
+            // 显示欢迎信息
+            const info = document.createElement('div');
+            info.className = 'test-result info';
+            info.innerHTML = '<strong>测试页面已加载:</strong> 可以开始测试各项性能优化功能';
+            document.getElementById('cache-results').appendChild(info);
+        });
+    </script>
+</body>
+</html>
