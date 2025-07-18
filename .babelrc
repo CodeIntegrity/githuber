@@ -1,7 +1,4 @@
-{
-    "presets": ["es2015", "stage-2"],
-    "plugins": [
-        "transform-runtime"
-    ],
+﻿{
+    "presets": ["babel-preset-poi"],
     "comments": false
 }

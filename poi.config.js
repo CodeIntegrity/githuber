@@ -7,6 +7,7 @@
 'use strict';
 
 const path = require('path');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = (options, req) => ({
     entry: 'src/index.js',
@@ -25,16 +26,21 @@ module.exports = (options, req) => ({
     extendWebpack(cfg) {
         // Disable progress bar while building
         // cfg.plugins.delete('progress-bar');
-        cfg.module.rule('scss')
-            .use('sass-loader')
-            .tap(opt => {
-                opt.includePaths = [path.resolve(__dirname, './node_modules')];
-                return opt;
-            });
     },
     webpack(cfg) {
         cfg.resolve.modules.push(path.resolve('src'));
         cfg.resolve.alias.vue$ = 'vue/dist/vue.js';
+
+        // 添加复制静态文件的插件
+        cfg.plugins.push(
+            new CopyWebpackPlugin([
+                {
+                    from: path.resolve(__dirname, 'static'),
+                    to: path.resolve(__dirname, 'dist'),
+                    ignore: ['.*']
+                }
+            ])
+        );
 
         if (!options.dev) {
             cfg.devtool = false;
